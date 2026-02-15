@@ -22,6 +22,16 @@ openapi/seedlink-ai-abstraction-v1.yaml
 ```
 
 This file defines all endpoints, schemas, and request/response contracts for:
+---
+
+## Core Platform Compatibility
+
+This AI Abstraction Layer is designed to operate against:
+Seedlink Core Platform API v1.4.0
+
+It intentionally exposes a reduced, AI-safe surface area of the Core Platform.
+It does not mirror the full Core contract.
+
 
 - AI middleware (WhatsApp / webchat / call integrations)
 - Future AI agents
