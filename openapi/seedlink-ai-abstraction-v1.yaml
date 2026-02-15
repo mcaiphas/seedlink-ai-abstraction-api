@@ -1,0 +1,1441 @@
+openapi: 3.0.3
+info:
+  title: Seedlink AI Abstraction Layer API
+  version: 1.0.0
+  description: >
+    AI-facing orchestration API for Seedlink. Provides a stable, AI-safe interface to Commerce, LMS, and Logistics (Drovvi),
+    including unified search, user context, safe actions, coaching slot holds, and realtime events (SSE).
+servers:
+  - url: https://api.seedlink.co.za
+    description: Production
+  - url: https://staging.api.seedlink.co.za
+    description: Staging
+
+tags:
+  - name: Health
+  - name: Search
+  - name: Context
+  - name: Actions
+  - name: Coaching
+  - name: Handoff
+  - name: Events
+  - name: Admin
+
+security:
+  - BearerAuth: []
+
+paths:
+  /ai/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /ai/search:
+    post:
+      tags: [Search]
+      summary: Unified AI search across products, courses, coaching, and content pointers
+      operationId: aiSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AISearchRequest"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AISearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /ai/context/profile:
+    get:
+      tags: [Context]
+      summary: Get verified user's profile summary (AI-safe)
+      operationId: getAIProfile
+      parameters:
+        - $ref: "#/components/parameters/XConversationId"
+        - $ref: "#/components/parameters/XChannel"
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIUserProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/context/orders:
+    get:
+      tags: [Context]
+      summary: Get recent orders summary (AI-safe)
+      operationId: getAIOrders
+      parameters:
+        - $ref: "#/components/parameters/XConversationId"
+        - $ref: "#/components/parameters/XChannel"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrderSummaries"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/context/enrollments:
+    get:
+      tags: [Context]
+      summary: Get recent enrollments/progress summary (AI-safe)
+      operationId: getAIEnrollments
+      parameters:
+        - $ref: "#/components/parameters/XConversationId"
+        - $ref: "#/components/parameters/XChannel"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Enrollments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedEnrollmentSummaries"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/context/deliveries:
+    get:
+      tags: [Context]
+      summary: Get recent deliveries/tracking summary (AI-safe; proxied from Drovvi or logistics provider)
+      operationId: getAIDeliveries
+      parameters:
+        - $ref: "#/components/parameters/XConversationId"
+        - $ref: "#/components/parameters/XChannel"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedDeliverySummaries"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/context/entitlements:
+    get:
+      tags: [Context]
+      summary: Get verified user's entitlements summary (courses, modules, coaching packs, discounts)
+      operationId: getAIEntitlements
+      parameters:
+        - $ref: "#/components/parameters/XConversationId"
+        - $ref: "#/components/parameters/XChannel"
+      responses:
+        "200":
+          description: Entitlements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementsSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/actions/cart/draft:
+    post:
+      tags: [Actions]
+      summary: Create or update an AI-created draft cart (optional)
+      description: >
+        Creates a server-side draft cart for the verified user, using stable item references (product/course/coaching pack).
+        Draft carts are not orders and do not reserve inventory unless explicitly supported by commerce engine.
+      operationId: createOrUpdateDraftCart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftCartUpsertRequest"
+      responses:
+        "200":
+          description: Draft cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftCart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/actions/checkout/start:
+    post:
+      tags: [Actions]
+      summary: Start checkout for a draft cart and return a hosted checkout URL (optional)
+      operationId: startCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutStartRequest"
+      responses:
+        "200":
+          description: Checkout session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutStartResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/actions/notify:
+    post:
+      tags: [Actions]
+      summary: Send a notification to a user or conversation (AI-triggered; audited)
+      operationId: sendAINotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/coaching/reserve:
+    post:
+      tags: [Coaching]
+      summary: Reserve a coaching slot for 10 minutes (HOLD)
+      description: >
+        Standard booking approach:
+        - Creates a reservation/hold for the selected slot (default 10 minutes)
+        - Returns a reservation_id and expires_at
+        - If payment is not confirmed before expiry, the hold is released automatically
+      operationId: reserveCoachingSlot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoachingReserveRequest"
+      responses:
+        "200":
+          description: Reservation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachingReservation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /ai/coaching/release:
+    post:
+      tags: [Coaching]
+      summary: Release a coaching slot hold (manual release)
+      operationId: releaseCoachingSlot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoachingReleaseRequest"
+      responses:
+        "200":
+          description: Released
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachingReservationReleased"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/coaching/confirm:
+    post:
+      tags: [Coaching]
+      summary: Confirm a coaching booking after payment confirmation
+      description: >
+        Confirms the reservation (reservation_id) after a verified payment event.
+        Creates/links the meeting (Zoom/Teams) as configured and issues final booking confirmation.
+      operationId: confirmCoachingBooking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoachingConfirmRequest"
+      responses:
+        "200":
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoachingBooking"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /ai/handoff:
+    post:
+      tags: [Handoff]
+      summary: Create a human handoff ticket (CRM/helpdesk/agent queue)
+      operationId: createHandoffTicket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HandoffCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoffTicket"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /ai/events/stream:
+    get:
+      tags: [Events]
+      summary: Server-Sent Events stream for realtime updates
+      description: >
+        SSE stream used by AI middleware (and optionally web clients) to receive realtime events.
+        Use query filters to reduce noise.
+      operationId: streamEvents
+      parameters:
+        - $ref: "#/components/parameters/XConversationId"
+        - name: topics
+          in: query
+          description: Comma-separated topics to subscribe to (e.g., user.notifications,orders.123)
+          schema:
+            type: string
+            nullable: true
+        - name: event_types
+          in: query
+          description: Comma-separated event types (e.g., order.paid,delivery.status_changed)
+          schema:
+            type: string
+            nullable: true
+        - name: since
+          in: query
+          description: RFC3339 timestamp to replay events since
+          schema:
+            type: string
+            format: date-time
+            nullable: true
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream. Each message is an event with id/type/data fields.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /ai/admin/audit:
+    get:
+      tags: [Admin]
+      summary: Query AI audit logs (restricted)
+      operationId: queryAuditLogs
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: conversation_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: channel
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Channel"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Audit results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAuditEvents"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ServiceAuth:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+      description: Optional internal service token for trusted service-to-service calls.
+
+  parameters:
+    XConversationId:
+      name: X-Conversation-Id
+      in: header
+      required: false
+      description: Conversation/session identifier used for audit correlation.
+      schema:
+        type: string
+    XChannel:
+      name: X-Channel
+      in: header
+      required: false
+      description: Interaction channel (e.g., whatsapp, webchat, call).
+      schema:
+        $ref: "#/components/schemas/Channel"
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, time]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+          example: seedlink-ai-abstraction
+        time:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+
+    Channel:
+      type: string
+      enum: [whatsapp, webchat, call, email, sms, api]
+
+    Locale:
+      type: string
+      example: en-ZA
+
+    Currency:
+      type: string
+      example: ZAR
+
+    AcceptedResponse:
+      type: object
+      required: [accepted, request_id]
+      properties:
+        accepted:
+          type: boolean
+          example: true
+        request_id:
+          type: string
+          example: req_01JABCDEF123
+
+    ErrorResponse:
+      type: object
+      required: [error, message, request_id]
+      properties:
+        error:
+          type: string
+          example: bad_request
+        message:
+          type: string
+          example: Invalid payload
+        request_id:
+          type: string
+          example: req_01JABCDEF123
+        details:
+          type: object
+          additionalProperties: true
+
+    AIUserProfile:
+      type: object
+      required: [user_id, display_name, verified]
+      properties:
+        user_id:
+          type: string
+          example: usr_01JUSER123
+        display_name:
+          type: string
+          example: Caiphas Muyambo
+        verified:
+          type: boolean
+          description: True if identity was verified via login/OTP and token is user-bound.
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        customer_segment_id:
+          type: string
+          nullable: true
+        default_currency:
+          $ref: "#/components/schemas/Currency"
+        locale:
+          $ref: "#/components/schemas/Locale"
+
+    AISearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          example: "PAN 4R-152R 80k price"
+        locale:
+          $ref: "#/components/schemas/Locale"
+        channel:
+          $ref: "#/components/schemas/Channel"
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        filters:
+          $ref: "#/components/schemas/AISearchFilters"
+        user_context:
+          $ref: "#/components/schemas/AIUserContextHint"
+        include:
+          type: array
+          description: Limit which result kinds to include.
+          items:
+            $ref: "#/components/schemas/AISearchResultKind"
+
+    AISearchFilters:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          $ref: "#/components/schemas/AISearchResultKind"
+        product_category:
+          type: string
+          nullable: true
+          example: "Seeds"
+        crop:
+          type: string
+          nullable: true
+          example: "maize"
+        region:
+          type: string
+          nullable: true
+          example: "Mpumalanga"
+        price_list_id:
+          type: string
+          nullable: true
+        warehouse_id:
+          type: string
+          nullable: true
+        availability_only:
+          type: boolean
+          default: false
+        language:
+          type: string
+          nullable: true
+          example: "en"
+
+    AIUserContextHint:
+      type: object
+      description: Optional hints for improved responses; not a substitute for verified identity.
+      properties:
+        user_id:
+          type: string
+          nullable: true
+        customer_segment_id:
+          type: string
+          nullable: true
+        location_hint:
+          type: string
+          nullable: true
+          example: "Johannesburg"
+        last_order_id:
+          type: string
+          nullable: true
+
+    AISearchResponse:
+      type: object
+      required: [results, request_id]
+      properties:
+        request_id:
+          type: string
+          example: req_01JSEARCH123
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AISearchResult"
+        suggestions:
+          type: array
+          items:
+            type: string
+          example: ["Do you want 60k or 80k pack size?", "Which province/warehouse should we price from?"]
+        next_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AINextAction"
+        debug:
+          type: object
+          additionalProperties: true
+          description: Optional debug context for internal/testing.
+
+    AISearchResultKind:
+      type: string
+      enum: [product, course, module, coaching_offer, faq_pointer, policy_pointer]
+
+    AISearchResult:
+      type: object
+      required: [kind, id, title]
+      properties:
+        kind:
+          $ref: "#/components/schemas/AISearchResultKind"
+        id:
+          type: string
+          description: Stable ID in the upstream system (or unified reference).
+          example: "prd_01JPRD123"
+        title:
+          type: string
+          example: "Maize Hybrid PAN 4R-152R (80k)"
+        subtitle:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+          description: Public deep link (product page/course page).
+        price:
+          $ref: "#/components/schemas/PriceQuote"
+        availability:
+          $ref: "#/components/schemas/AvailabilitySummary"
+        attributes:
+          type: object
+          additionalProperties: true
+          description: AI-safe attributes like pack size, treatment, duration, etc.
+
+    PriceQuote:
+      type: object
+      nullable: true
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        amount:
+          type: number
+          format: float
+          example: 2450.00
+        unit:
+          type: string
+          nullable: true
+          example: "per bag"
+        price_list_id:
+          type: string
+          nullable: true
+        discount_applied:
+          type: boolean
+          default: false
+        discount_details:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    AvailabilitySummary:
+      type: object
+      nullable: true
+      properties:
+        in_stock:
+          type: boolean
+          example: true
+        quantity_available:
+          type: integer
+          nullable: true
+          example: 42
+        warehouse_id:
+          type: string
+          nullable: true
+        warehouse_name:
+          type: string
+          nullable: true
+        lead_time_days:
+          type: integer
+          nullable: true
+          example: 2
+        notes:
+          type: string
+          nullable: true
+
+    AINextAction:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [ask_clarifying_question, propose_cart, start_checkout, handoff_human, reserve_coaching]
+        payload:
+          type: object
+          additionalProperties: true
+
+    OrderStatus:
+      type: string
+      enum: [draft, pending_payment, paid, processing, shipped, delivered, cancelled, refunded]
+
+    OrderSummary:
+      type: object
+      required: [order_id, status, created_at, total]
+      properties:
+        order_id:
+          type: string
+          example: ord_01JORD123
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        created_at:
+          type: string
+          format: date-time
+        total:
+          $ref: "#/components/schemas/PriceQuote"
+        items_count:
+          type: integer
+          example: 3
+        fulfillment_type:
+          type: string
+          enum: [delivery, pickup, digital]
+        tracking_ref:
+          type: string
+          nullable: true
+
+    PaginatedOrderSummaries:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderSummary"
+        next_cursor:
+          type: string
+          nullable: true
+
+    EnrollmentStatus:
+      type: string
+      enum: [active, completed, expired, revoked]
+
+    EnrollmentSummary:
+      type: object
+      required: [enrollment_id, course_id, course_title, status]
+      properties:
+        enrollment_id:
+          type: string
+          example: enr_01JENR123
+        course_id:
+          type: string
+          example: crs_01JCRS123
+        course_title:
+          type: string
+          example: "Maize Production Fundamentals"
+        status:
+          $ref: "#/components/schemas/EnrollmentStatus"
+        progress_percent:
+          type: number
+          format: float
+          nullable: true
+          example: 35.5
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    PaginatedEnrollmentSummaries:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnrollmentSummary"
+        next_cursor:
+          type: string
+          nullable: true
+
+    DeliveryStatus:
+      type: string
+      enum: [quoted, booked, driver_assigned, picked_up, in_transit, delivered, failed, cancelled]
+
+    DeliverySummary:
+      type: object
+      required: [delivery_id, status, created_at]
+      properties:
+        delivery_id:
+          type: string
+          example: del_01JDEL123
+        status:
+          $ref: "#/components/schemas/DeliveryStatus"
+        created_at:
+          type: string
+          format: date-time
+        provider:
+          type: string
+          example: drovvi
+        origin:
+          type: string
+          nullable: true
+        destination:
+          type: string
+          nullable: true
+        tracking_url:
+          type: string
+          nullable: true
+
+    PaginatedDeliverySummaries:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliverySummary"
+        next_cursor:
+          type: string
+          nullable: true
+
+    EntitlementsSummary:
+      type: object
+      required: [user_id, entitlements]
+      properties:
+        user_id:
+          type: string
+        entitlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entitlement"
+
+    Entitlement:
+      type: object
+      required: [entitlement_id, type, status]
+      properties:
+        entitlement_id:
+          type: string
+        type:
+          type: string
+          enum: [course, module, coaching_pack, discount, promotion_access]
+        status:
+          type: string
+          enum: [active, used, expired, revoked]
+        reference_id:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DraftCartUpsertRequest:
+      type: object
+      required: [items]
+      properties:
+        cart_id:
+          type: string
+          nullable: true
+          description: If provided, updates existing cart; otherwise creates a new draft cart.
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/DraftCartItem"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        price_list_id:
+          type: string
+          nullable: true
+        warehouse_id:
+          type: string
+          nullable: true
+          description: Optional preferred origin warehouse/depot for physical goods pricing/availability.
+        notes:
+          type: string
+          nullable: true
+
+    DraftCartItem:
+      type: object
+      required: [kind, reference_id, quantity]
+      properties:
+        kind:
+          type: string
+          enum: [product, course, module, coaching_offer]
+        reference_id:
+          type: string
+          example: prd_01JPRD123
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        variant_id:
+          type: string
+          nullable: true
+          description: For product variants/pack sizes.
+        attributes:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    DraftCart:
+      type: object
+      required: [cart_id, status, items, totals, created_at]
+      properties:
+        cart_id:
+          type: string
+          example: cart_01JCART123
+        status:
+          type: string
+          enum: [draft, checkout_started]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftCartItem"
+        totals:
+          $ref: "#/components/schemas/CartTotals"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        checkout_url:
+          type: string
+          nullable: true
+
+    CartTotals:
+      type: object
+      required: [currency, subtotal, total]
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        subtotal:
+          type: number
+          format: float
+          example: 2000.00
+        discounts:
+          type: number
+          format: float
+          nullable: true
+          example: 200.00
+        taxes:
+          type: number
+          format: float
+          nullable: true
+        shipping:
+          type: number
+          format: float
+          nullable: true
+        total:
+          type: number
+          format: float
+          example: 1800.00
+        discount_breakdown:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          nullable: true
+
+    CheckoutStartRequest:
+      type: object
+      required: [cart_id]
+      properties:
+        cart_id:
+          type: string
+        return_url:
+          type: string
+          nullable: true
+          description: Where to redirect after hosted checkout completion.
+        channel:
+          $ref: "#/components/schemas/Channel"
+
+    CheckoutStartResponse:
+      type: object
+      required: [checkout_id, checkout_url]
+      properties:
+        checkout_id:
+          type: string
+          example: chk_01JCHK123
+        checkout_url:
+          type: string
+          example: "https://shop.seedlink.co.za/checkout/chk_01JCHK123"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    NotificationRequest:
+      type: object
+      required: [target, message]
+      properties:
+        target:
+          $ref: "#/components/schemas/NotificationTarget"
+        message:
+          $ref: "#/components/schemas/NotificationMessage"
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    NotificationTarget:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [user, conversation]
+        user_id:
+          type: string
+          nullable: true
+        conversation_id:
+          type: string
+          nullable: true
+        channel:
+          $ref: "#/components/schemas/Channel"
+
+    NotificationMessage:
+      type: object
+      required: [text]
+      properties:
+        title:
+          type: string
+          nullable: true
+        text:
+          type: string
+          example: "Your order is confirmed and will be dispatched from Ermelo depot."
+        deeplink_url:
+          type: string
+          nullable: true
+
+    CoachingReserveRequest:
+      type: object
+      required: [coach_id, slot_start, duration_minutes]
+      properties:
+        coach_id:
+          type: string
+          example: coach_01JCOACH123
+        offer_id:
+          type: string
+          nullable: true
+          description: Optional coaching offer/package reference.
+        slot_start:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+          minimum: 15
+          maximum: 240
+          example: 60
+        hold_minutes:
+          type: integer
+          minimum: 5
+          maximum: 30
+          default: 10
+          description: Hold TTL; standard is 10 minutes.
+        meeting_provider:
+          type: string
+          enum: [zoom, teams, none]
+          default: none
+        notes:
+          type: string
+          nullable: true
+
+    CoachingReservation:
+      type: object
+      required: [reservation_id, status, expires_at, slot_start, duration_minutes]
+      properties:
+        reservation_id:
+          type: string
+          example: rsv_01JRSV123
+        status:
+          type: string
+          enum: [held]
+        expires_at:
+          type: string
+          format: date-time
+        slot_start:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+        coach_id:
+          type: string
+        offer_id:
+          type: string
+          nullable: true
+        payment_intent:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Optional checkout/payment reference to complete confirmation.
+        meeting_provider:
+          type: string
+          enum: [zoom, teams, none]
+          default: none
+
+    CoachingReleaseRequest:
+      type: object
+      required: [reservation_id]
+      properties:
+        reservation_id:
+          type: string
+        reason:
+          type: string
+          nullable: true
+          example: "user_cancelled"
+
+    CoachingReservationReleased:
+      type: object
+      required: [reservation_id, status, released_at]
+      properties:
+        reservation_id:
+          type: string
+        status:
+          type: string
+          enum: [released]
+        released_at:
+          type: string
+          format: date-time
+
+    CoachingConfirmRequest:
+      type: object
+      required: [reservation_id, payment_reference]
+      properties:
+        reservation_id:
+          type: string
+        payment_reference:
+          type: string
+          description: Reference to a verified payment event/transaction.
+          example: pay_01JPAY123
+        provider:
+          type: string
+          nullable: true
+          example: "payfast"
+        meeting_provider:
+          type: string
+          enum: [zoom, teams, none]
+          default: none
+
+    CoachingBooking:
+      type: object
+      required: [booking_id, status, slot_start, duration_minutes, coach_id]
+      properties:
+        booking_id:
+          type: string
+          example: bok_01JBOK123
+        status:
+          type: string
+          enum: [confirmed, cancelled, completed]
+        slot_start:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+        coach_id:
+          type: string
+        meeting:
+          $ref: "#/components/schemas/MeetingDetails"
+        payment_reference:
+          type: string
+
+    MeetingDetails:
+      type: object
+      nullable: true
+      properties:
+        provider:
+          type: string
+          enum: [zoom, teams]
+        join_url:
+          type: string
+          nullable: true
+        meeting_id:
+          type: string
+          nullable: true
+        passcode:
+          type: string
+          nullable: true
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    HandoffCreateRequest:
+      type: object
+      required: [category, summary]
+      properties:
+        category:
+          type: string
+          enum: [sales, support, agronomy, logistics, payments, lms, coaching, technical]
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+          default: normal
+        summary:
+          type: string
+          example: "Customer needs help selecting maize hybrid and placing order for 50ha."
+        details:
+          type: string
+          nullable: true
+        user_id:
+          type: string
+          nullable: true
+        conversation_id:
+          type: string
+          nullable: true
+        channel:
+          $ref: "#/components/schemas/Channel"
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/HandoffAttachment"
+        suggested_next_steps:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    HandoffAttachment:
+      type: object
+      required: [type, url]
+      properties:
+        type:
+          type: string
+          enum: [image, pdf, link, text]
+        url:
+          type: string
+        label:
+          type: string
+          nullable: true
+
+    HandoffTicket:
+      type: object
+      required: [ticket_id, status, created_at, category, summary]
+      properties:
+        ticket_id:
+          type: string
+          example: tkt_01JTKT123
+        status:
+          type: string
+          enum: [open, assigned, in_progress, resolved, closed]
+        created_at:
+          type: string
+          format: date-time
+        category:
+          type: string
+        summary:
+          type: string
+        assigned_to:
+          type: string
+          nullable: true
+        external_ref:
+          type: string
+          nullable: true
+
+    AuditEvent:
+      type: object
+      required: [id, at, action, outcome]
+      properties:
+        id:
+          type: string
+          example: aud_01JAUD123
+        at:
+          type: string
+          format: date-time
+        action:
+          type: string
+          example: "ai.search"
+        outcome:
+          type: string
+          enum: [success, failure]
+        conversation_id:
+          type: string
+          nullable: true
+        channel:
+          $ref: "#/components/schemas/Channel"
+        user_id:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PaginatedAuditEvents:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        next_cursor:
+          type: string
+          nullable: true
+
